@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-09-17
+
+### Fixed
+- **PyPI release** — v1.0.0 was tagged and released on GitHub but never reached PyPI: the tag still carried `version = "0.9.0"` in `pyproject.toml`, so the publish job tried to re-upload 0.9.0 and PyPI rejected it with HTTP 400. 1.0.1 ships the 1.0.0 changes below with the version metadata (`pyproject.toml`, `dbt_project.yml`, `server.json`, `__version__`) corrected and aligned.
+
 ## [1.0.0] — 2026-09-03
 
 ### Added
