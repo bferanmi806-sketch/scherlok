@@ -14,6 +14,10 @@ CARDINALITY_CRITICAL_PCT = 200  # 3x change (e.g. status went from 5 to 500)
 # considered near-unique and we compare distinct ratios instead of absolute
 # distinct counts, so a volume drop does not fire cardinality noise.
 UNIQUE_RATIO = 0.95
+# Ratio changes are bounded to 0-100%, so the absolute cardinality thresholds
+# above cannot classify a near-unique column as critical.
+UNIQUE_RATIO_WARNING_PCT = 10
+UNIQUE_RATIO_CRITICAL_PCT = 50
 
 
 def detect_cardinality_anomalies(
@@ -95,11 +99,11 @@ def detect_cardinality_anomalies(
             stored_ratio = stored_card / stored_rows
             if stored_ratio >= UNIQUE_RATIO:
                 current_ratio = current_card / current_rows
-                if stored_ratio == 0:
-                    return anomalies
                 change_pct = abs(current_ratio - stored_ratio) / stored_ratio * 100
                 direction = "decreased" if current_ratio < stored_ratio else "increased"
-                if change_pct >= CARDINALITY_CRITICAL_PCT:
+                # Keep the exact 50% regression case in the warning band;
+                # a loss beyond that boundary is critical.
+                if change_pct > UNIQUE_RATIO_CRITICAL_PCT:
                     anomalies.append({
                         "table": table,
                         "type": "cardinality_change",
@@ -110,7 +114,7 @@ def detect_cardinality_anomalies(
                         ),
                         "severity": Severity.CRITICAL,
                     })
-                elif change_pct >= CARDINALITY_WARNING_PCT:
+                elif change_pct >= UNIQUE_RATIO_WARNING_PCT:
                     anomalies.append({
                         "table": table,
                         "type": "cardinality_change",
