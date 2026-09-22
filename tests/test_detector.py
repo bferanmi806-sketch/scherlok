@@ -320,6 +320,8 @@ class TestCardinalityNearUniqueColumns:
         assert anomalies == []
 
     def test_duplicates_on_unique_column_still_fire(self):
+        # An exact 50% uniqueness loss is CRITICAL (>= on both bands,
+        # matching the absolute path).
         anomalies = detect_cardinality_anomalies(
             "orders",
             "id",
@@ -329,8 +331,66 @@ class TestCardinalityNearUniqueColumns:
             self.STORED_VOL,
         )
         assert len(anomalies) == 1
-        assert anomalies[0]["severity"] == Severity.WARNING
+        assert anomalies[0]["severity"] == Severity.CRITICAL
         assert "decreased" in anomalies[0]["message"]
+        assert "distinct ratio" in anomalies[0]["message"]
+
+    def test_exact_warning_boundary_fires_despite_float_repr(self):
+        # 1 - 0.9 is 0.09999999999999998 in binary floats; a clean 10%
+        # loss must still warn.
+        anomalies = detect_cardinality_anomalies(
+            "orders",
+            "id",
+            {"distinct_count": 900},
+            self.STORED_DIST,
+            {"row_count": 1000},
+            self.STORED_VOL,
+        )
+        assert len(anomalies) == 1
+        assert anomalies[0]["severity"] == Severity.WARNING
+        assert "distinct ratio" in anomalies[0]["message"]
+
+    def test_partial_loss_below_critical_stays_warning(self):
+        # 1000 -> 800 is a 20% uniqueness loss: clearly warning, and clear
+        # of the 10% float edge.
+        anomalies = detect_cardinality_anomalies(
+            "orders",
+            "id",
+            {"distinct_count": 800},
+            self.STORED_DIST,
+            {"row_count": 1000},
+            self.STORED_VOL,
+        )
+        assert len(anomalies) == 1
+        assert anomalies[0]["severity"] == Severity.WARNING
+        assert "distinct ratio" in anomalies[0]["message"]
+
+    def test_nulling_unique_values_is_silent(self):
+        # 20% of a unique e-mail column nulled: 1,600 remaining values are
+        # still distinct, so the non-null ratio is unchanged and nothing fires.
+        anomalies = detect_cardinality_anomalies(
+            "users",
+            "email",
+            {"distinct_count": 1600, "null_count": 400},
+            {"distinct_count": 2000, "null_count": 0},
+            {"row_count": 2000},
+            {"row_count": 2000},
+        )
+        assert anomalies == []
+
+    def test_null_aware_ratio_still_fires_on_real_duplicates(self):
+        # Same 20% NULLs, but only 800 distinct among the 1,600 non-null:
+        # uniqueness halved, so it must fire.
+        anomalies = detect_cardinality_anomalies(
+            "users",
+            "email",
+            {"distinct_count": 800, "null_count": 400},
+            {"distinct_count": 2000, "null_count": 0},
+            {"row_count": 2000},
+            {"row_count": 2000},
+        )
+        assert len(anomalies) == 1
+        assert anomalies[0]["severity"] == Severity.CRITICAL
         assert "distinct ratio" in anomalies[0]["message"]
 
     def test_low_cardinality_column_keeps_absolute_comparison(self):
