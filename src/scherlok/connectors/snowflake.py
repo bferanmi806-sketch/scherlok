@@ -1,6 +1,6 @@
 """Snowflake connector using snowflake-connector-python."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from scherlok.connectors.base import BaseConnector
@@ -126,6 +126,11 @@ class SnowflakeConnector(BaseConnector):
         cur.close()
         return rows
 
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        """Quote a Snowflake identifier, escaping embedded double quotes."""
+        return f'"{identifier.replace(chr(34), chr(34) * 2)}"'
+
     def list_tables(self) -> list[str]:
         """List all tables and views in the schema."""
         sql = (
@@ -239,3 +244,18 @@ class SnowflakeConnector(BaseConnector):
         except Exception:
             pass
         return None
+
+    def get_column_max(self, table: str, column: str) -> date | datetime | None:
+        """Return the maximum value in a column with one aggregate query."""
+        fqn = ".".join(
+            self._quote_identifier(part)
+            for part in (self._database, self._schema, table.upper())
+        )
+        quoted_column = self._quote_identifier(column.upper())
+        try:
+            rows = self._query(
+                f"SELECT MAX({quoted_column}) AS max_value FROM {fqn}"
+            )
+        except Exception:
+            return None
+        return rows[0]["max_value"] if rows else None

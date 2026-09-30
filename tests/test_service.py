@@ -27,6 +27,23 @@ class FakeConnector:
         return datetime.now(timezone.utc)
 
 
+class FallbackConnector(FakeConnector):
+    def __init__(self):
+        self.columns_calls = 0
+        self.column_max_calls = []
+
+    def get_columns(self, table):
+        self.columns_calls += 1
+        return [{"name": "updated_at", "type": "timestamp", "nullable": True}]
+
+    def get_last_modified(self, table):
+        return None
+
+    def get_column_max(self, table, column):
+        self.column_max_calls.append((table, column))
+        return datetime.now(timezone.utc)
+
+
 def test_profile_and_detect_reads_and_reuses_distribution_history():
     distribution_history = [{"mean": 10, "null_rate": 0, "distinct_count": 100}]
     store = MagicMock()
@@ -65,3 +82,21 @@ def test_profile_and_detect_reads_and_reuses_distribution_history():
     ) > 0
     assert store.save_profile.call_args_list[0][0][:2] == ("users", "distribution:id")
     assert store.save_profile.call_args_list[1][0][:2] == ("users", "volume")
+
+
+def test_profile_and_detect_reuses_schema_columns_for_freshness_fallback():
+    connector = FallbackConnector()
+    store = MagicMock()
+    store.get_profile_history.return_value = []
+    store.get_latest_profile.return_value = None
+
+    profile_and_detect(connector, store, "users")
+
+    assert connector.columns_calls == 1
+    assert connector.column_max_calls == [("users", "updated_at")]
+    freshness = next(
+        call.args[2]
+        for call in store.save_profile.call_args_list
+        if call.args[:2] == ("users", "freshness")
+    )
+    assert freshness["freshness_source"] == "updated_at"

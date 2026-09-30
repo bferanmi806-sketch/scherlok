@@ -207,6 +207,20 @@ def test_get_last_modified_returns_none(connector):
     assert c.get_last_modified("orders") is None
 
 
+def test_get_column_max_quotes_identifiers_and_uses_one_aggregate(connector):
+    c, fake_conn = connector
+    latest = datetime(2026, 4, 20, 12, 0, 0)
+    cur = _wire_cursor(fake_conn, fetchone={"max_value": latest})
+
+    result = c.get_column_max("events` archive", "strange`updated_at")
+
+    assert result == latest
+    cur.execute.assert_called_once()
+    assert cur.execute.call_args.args[0] == (
+        "SELECT MAX(`strange``updated_at`) AS max_value FROM `events`` archive`"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Test 8 — _classify_error maps known messages correctly
 # ---------------------------------------------------------------------------

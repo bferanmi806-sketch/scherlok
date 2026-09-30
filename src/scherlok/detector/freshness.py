@@ -31,6 +31,8 @@ def detect_freshness_anomalies(
         return anomalies
 
     ratio = current_hours / stored_hours if stored_hours > 0 else 0
+    source = current_profile.get("freshness_source")
+    source_note = f" (based on `{source}`)" if source and source != "metadata" else ""
 
     if ratio >= FRESHNESS_CRITICAL_MULTIPLIER:
         anomalies.append({
@@ -38,7 +40,7 @@ def detect_freshness_anomalies(
             "type": "freshness_critical",
             "message": (
                 f"Table has not been updated for {current_hours:.1f}h "
-                f"(expected ~{stored_hours:.1f}h, {ratio:.1f}x overdue)"
+                f"(expected ~{stored_hours:.1f}h, {ratio:.1f}x overdue){source_note}"
             ),
             "severity": Severity.CRITICAL,
         })
@@ -48,7 +50,7 @@ def detect_freshness_anomalies(
             "type": "freshness_stale",
             "message": (
                 f"Table update delayed: {current_hours:.1f}h since last update "
-                f"(expected ~{stored_hours:.1f}h, {ratio:.1f}x overdue)"
+                f"(expected ~{stored_hours:.1f}h, {ratio:.1f}x overdue){source_note}"
             ),
             "severity": Severity.WARNING,
         })

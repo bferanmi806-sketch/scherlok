@@ -1,6 +1,6 @@
 """BigQuery connector using google-cloud-bigquery."""
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from scherlok.connectors.base import BaseConnector
@@ -95,6 +95,12 @@ class BigQueryConnector(BaseConnector):
         """Execute a query and return results as list of dicts."""
         result = self._client.query(sql).result()
         return [dict(row) for row in result]
+
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        """Quote a BigQuery identifier, escaping its backtick delimiter."""
+        escaped = identifier.replace("\\", "\\\\").replace("`", "\\`")
+        return f"`{escaped}`"
 
     def list_tables(self) -> list[str]:
         """List all tables in the dataset."""
@@ -199,3 +205,16 @@ class BigQueryConnector(BaseConnector):
         except Exception:
             pass
         return None
+
+    def get_column_max(self, table: str, column: str) -> date | datetime | None:
+        """Return the maximum value in a column with one aggregate query."""
+        table_path = f"{self._project}.{self._dataset}.{table}"
+        sql = (
+            f"SELECT MAX({self._quote_identifier(column)}) AS max_value "
+            f"FROM {self._quote_identifier(table_path)}"
+        )
+        try:
+            rows = self._query(sql)
+        except Exception:
+            return None
+        return rows[0]["max_value"] if rows else None

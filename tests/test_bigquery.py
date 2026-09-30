@@ -83,6 +83,24 @@ class TestBigQueryConnector:
         c._client = MagicMock()
         assert c.get_last_modified("users") is None
 
+    @patch("scherlok.connectors.bigquery.BigQueryConnector._query")
+    def test_get_column_max_quotes_identifiers_and_uses_one_aggregate(self, mock_query):
+        from scherlok.connectors.bigquery import BigQueryConnector
+
+        max_value = datetime(2026, 4, 20, 12, 0, tzinfo=timezone.utc)
+        mock_query.return_value = [{"max_value": max_value}]
+        c = BigQueryConnector("bigquery://my-project/my_dataset")
+        c._client = MagicMock()
+
+        result = c.get_column_max("events`archive", "strange`updated_at")
+
+        assert result == max_value
+        mock_query.assert_called_once()
+        query = mock_query.call_args.args[0]
+        assert query.count("MAX(") == 1
+        assert r"MAX(`strange\`updated_at`)" in query
+        assert r"`my-project.my_dataset.events\`archive`" in query
+
     def test_list_tables(self):
         from scherlok.connectors.bigquery import BigQueryConnector
 

@@ -1,6 +1,7 @@
 """Tests for DuckDBConnector using a real in-memory DuckDB database."""
 
 import importlib.util
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -121,3 +122,69 @@ def test_get_column_stats_numeric(connector):
 
 def test_get_last_modified_returns_none(connector):
     assert connector.get_last_modified("orders") is None
+
+
+def test_profile_freshness_uses_updated_at_with_real_duckdb(connector):
+    from scherlok.profiler.freshness import profile_freshness
+
+    connector._conn.execute(
+        "CREATE TABLE events (created_at TIMESTAMP, loaded_at TIMESTAMP, "
+        "updated_at TIMESTAMP, event_id INTEGER)"
+    )
+    now = datetime.now(timezone.utc)
+    connector._conn.execute(
+        "INSERT INTO events VALUES (?, ?, ?, 1)",
+        [now - timedelta(days=3), now - timedelta(hours=1), now - timedelta(hours=8)],
+    )
+
+    result = profile_freshness(connector, "events")
+
+    assert result["freshness_source"] == "updated_at"
+    assert result["last_modified"] is not None
+    assert result["hours_since_update"] == pytest.approx(8, abs=0.02)
+
+
+def test_profile_freshness_returns_none_without_timestamp_columns(connector):
+    from scherlok.profiler.freshness import profile_freshness
+
+    connector._conn.execute("CREATE TABLE dimensions (id INTEGER, label VARCHAR)")
+
+    result = profile_freshness(connector, "dimensions")
+
+    assert result["last_modified"] is None
+    assert result["hours_since_update"] is None
+    assert result["freshness_source"] is None
+
+
+def test_profile_freshness_supports_date_columns(connector):
+    from scherlok.profiler.freshness import profile_freshness
+
+    connector._conn.execute("CREATE TABLE dated_rows (business_date DATE)")
+    connector._conn.execute("INSERT INTO dated_rows VALUES (CURRENT_DATE - INTERVAL 5 DAY)")
+
+    result = profile_freshness(connector, "dated_rows")
+
+    assert result["freshness_source"] == "business_date"
+    assert result["last_modified"] is not None
+    assert result["hours_since_update"] is not None
+    assert result["hours_since_update"] >= 120
+
+
+def test_get_column_max_quotes_table_and_column_identifiers(connector):
+    from scherlok.connectors.duckdb import DuckDBConnector
+
+    table = 'events" archive'
+    column = 'extra"updated_at'
+    latest = datetime(2026, 1, 2, 3, 4, 5)
+    quoted_table = DuckDBConnector._quote_identifier(table)
+    quoted_column = DuckDBConnector._quote_identifier(column)
+    connector._conn.execute(
+        f"CREATE TABLE {quoted_table} ({quoted_column} TIMESTAMP)"
+    )
+    connector._conn.execute(
+        f"INSERT INTO {quoted_table} VALUES (?)",
+        [latest],
+    )
+
+    assert connector.get_column_max(table, column) == latest
+    assert connector.list_tables() == [table]

@@ -216,7 +216,7 @@ def investigate() -> None:
             sch = profile_schema(connector, table)
             store.save_profile(table, "schema", sch)
 
-            fresh = profile_freshness(connector, table)
+            fresh = profile_freshness(connector, table, columns=sch.get("columns", []))
             store.save_profile(table, "freshness", fresh)
 
             for col in sch.get("columns", []):
@@ -1318,7 +1318,9 @@ def _table_health(
         return "unknown"
     current_vol = profile_volume(connector, table)
     current_sch = profile_schema(connector, table)
-    current_fresh = profile_freshness(connector, table)
+    current_fresh = profile_freshness(
+        connector, table, columns=current_sch.get("columns", [])
+    )
     stored_fresh = store.get_latest_profile(table, "freshness")
     anomalies = detect_volume_anomalies(table, current_vol, vol)
     anomalies.extend(detect_schema_drift(table, current_sch, sch))

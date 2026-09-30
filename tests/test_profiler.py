@@ -86,6 +86,9 @@ def test_profile_freshness_returns_last_modified():
     assert result["last_modified"] is not None
     assert result["hours_since_update"] is not None
     assert result["hours_since_update"] > 0
+    assert result["freshness_source"] == "metadata"
+    connector.get_columns.assert_not_called()
+    connector.get_column_max.assert_not_called()
 
 
 def test_profile_freshness_handles_none():
@@ -95,3 +98,45 @@ def test_profile_freshness_handles_none():
     result = profile_freshness(connector, "users")
     assert result["last_modified"] is None
     assert result["hours_since_update"] is None
+    assert result["freshness_source"] is None
+    connector.get_column_max.assert_not_called()
+
+
+def test_profile_freshness_uses_deterministic_timestamp_priority():
+    """Prefer the documented updated_at column regardless of schema order."""
+    connector = _mock_connector()
+    connector.get_last_modified.return_value = None
+    connector.get_column_max.return_value = datetime(
+        2026, 3, 31, 12, 0, 0, tzinfo=timezone.utc
+    )
+    columns = [
+        {"name": "created_at", "type": "DATE"},
+        {"name": "loaded_at", "type": "TIMESTAMP"},
+        {"name": "updated_at", "type": "TIMESTAMP WITH TIME ZONE"},
+        {"name": "updated_at_count", "type": "BIGINT"},
+    ]
+
+    result = profile_freshness(connector, "users", columns=columns)
+
+    connector.get_columns.assert_not_called()
+    connector.get_column_max.assert_called_once_with("users", "updated_at")
+    assert result["freshness_source"] == "updated_at"
+    assert result["last_modified"] == "2026-03-31T12:00:00+00:00"
+
+
+def test_profile_freshness_breaks_generic_timestamp_ties_by_name():
+    """Generic *_at candidates use a stable name order, not schema order."""
+    connector = _mock_connector()
+    connector.get_last_modified.return_value = None
+    connector.get_column_max.return_value = datetime(
+        2026, 3, 31, 12, 0, 0, tzinfo=timezone.utc
+    )
+    columns = [
+        {"name": "zeta_at", "type": "TIMESTAMP"},
+        {"name": "alpha_at", "type": "TIMESTAMP"},
+    ]
+
+    result = profile_freshness(connector, "users", columns=columns)
+
+    connector.get_column_max.assert_called_once_with("users", "alpha_at")
+    assert result["freshness_source"] == "alpha_at"

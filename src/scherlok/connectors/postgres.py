@@ -1,10 +1,11 @@
 """PostgreSQL connector using psycopg2."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import psycopg2
 import psycopg2.extras
+from psycopg2 import sql as pg_sql
 
 from scherlok.connectors.base import BaseConnector
 
@@ -161,3 +162,17 @@ class PostgresConnector(BaseConnector):
             if row and row["last_mod"]:
                 return row["last_mod"]
             return None
+
+    def get_column_max(self, table: str, column: str) -> date | datetime | None:
+        """Return the maximum value in a column with one aggregate query."""
+        query = pg_sql.SQL("SELECT MAX({column}) AS max_value FROM {table}").format(
+            column=pg_sql.Identifier(column),
+            table=pg_sql.Identifier(table),
+        )
+        try:
+            with self._cursor() as cur:
+                cur.execute(query)
+                row = cur.fetchone()
+        except psycopg2.Error:
+            return None
+        return row["max_value"] if row else None

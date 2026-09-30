@@ -115,3 +115,21 @@ class TestSnowflakeConnector:
         c = SnowflakeConnector("snowflake://acc/db/schema")
         c._conn = MagicMock()
         assert c.get_last_modified("users") is None
+
+    @patch("scherlok.connectors.snowflake.SnowflakeConnector._query")
+    def test_get_column_max_quotes_identifiers_and_uses_one_aggregate(self, mock_query):
+        from scherlok.connectors.snowflake import SnowflakeConnector
+
+        max_value = datetime(2026, 4, 20, 12, 0, 0)
+        mock_query.return_value = [{"max_value": max_value}]
+        c = SnowflakeConnector("snowflake://acc/db/schema")
+        c._conn = MagicMock()
+
+        result = c.get_column_max('events" archive', 'strange"updated_at')
+
+        assert result == max_value
+        mock_query.assert_called_once()
+        assert mock_query.call_args.args[0] == (
+            'SELECT MAX("STRANGE""UPDATED_AT") AS max_value FROM '
+            '"db"."schema"."EVENTS"" ARCHIVE"'
+        )

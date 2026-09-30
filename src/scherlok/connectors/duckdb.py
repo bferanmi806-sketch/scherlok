@@ -1,6 +1,6 @@
 """DuckDB connector using duckdb."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -151,3 +151,15 @@ class DuckDBConnector(BaseConnector):
     def get_last_modified(self, table: str) -> datetime | None:
         """Return None because DuckDB does not track per-table modification time."""
         return None
+
+    def get_column_max(self, table: str, column: str) -> date | datetime | None:
+        """Return the maximum value in a column with one aggregate query."""
+        quoted_table = self._quote_identifier(table)
+        quoted_column = self._quote_identifier(column)
+        try:
+            row = self._conn.execute(
+                f"SELECT MAX({quoted_column}) AS max_value FROM {quoted_table}"
+            ).fetchone()
+        except duckdb.Error:
+            return None
+        return row[0] if row else None

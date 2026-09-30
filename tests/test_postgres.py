@@ -1,5 +1,6 @@
 """Tests for the Postgres connector using mocks."""
 
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 
@@ -36,6 +37,22 @@ def test_list_tables_query_includes_views():
     sql = cur.execute.call_args.args[0]
     assert "'BASE TABLE'" in sql
     assert "'VIEW'" in sql
+
+
+def test_get_column_max_uses_quoted_identifiers_and_one_aggregate():
+    from psycopg2 import sql as pg_sql
+
+    c, cur = _make_connector_with_mock_cursor([])
+    latest = datetime(2026, 4, 20, 12, 0, 0)
+    cur.fetchone.return_value = {"max_value": latest}
+
+    result = c.get_column_max('events" archive', 'strange"updated_at')
+
+    assert result == latest
+    cur.execute.assert_called_once()
+    query = cur.execute.call_args.args[0]
+    assert isinstance(query, pg_sql.Composed)
+    assert sum(isinstance(part, pg_sql.Identifier) for part in query._wrapped) == 2
 
 
 @patch("scherlok.connectors.postgres.psycopg2.connect")

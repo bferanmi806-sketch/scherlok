@@ -172,6 +172,15 @@ class TestFreshnessDetector:
         assert anomalies[0]["severity"] == Severity.WARNING
         assert anomalies[0]["type"] == "freshness_stale"
 
+    def test_message_identifies_timestamp_column_source(self):
+        current = {"hours_since_update": 10.0, "freshness_source": "updated_at"}
+        stored = {"hours_since_update": 4.0}
+
+        anomalies = detect_freshness_anomalies("t", current, stored)
+
+        assert len(anomalies) == 1
+        assert "based on `updated_at`" in anomalies[0]["message"]
+
     def test_critical_when_4x_overdue(self):
         current = {"hours_since_update": 48.0}
         stored = {"hours_since_update": 6.0}

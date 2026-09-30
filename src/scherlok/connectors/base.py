@@ -1,7 +1,7 @@
 """Abstract base connector for database backends."""
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import date, datetime
 
 
 class BaseConnector(ABC):
@@ -49,3 +49,7 @@ class BaseConnector(ABC):
     def get_last_modified(self, table: str) -> datetime | None:
         """Return the last known modification time for a table, or None."""
         ...
+
+    def get_column_max(self, table: str, column: str) -> date | datetime | None:
+        """Return the maximum value in a column when supported by the connector."""
+        return None

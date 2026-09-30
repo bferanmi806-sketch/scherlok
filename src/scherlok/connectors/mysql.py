@@ -1,6 +1,6 @@
 """MySQL connector using pymysql."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import urlparse
 
@@ -68,6 +68,11 @@ class MySQLConnector(BaseConnector):
     def _cursor(self) -> Any:
         """Return a DictCursor."""
         return self._conn.cursor()
+
+    @staticmethod
+    def _quote_identifier(identifier: str) -> str:
+        """Quote a MySQL identifier, escaping embedded backticks."""
+        return f"`{identifier.replace('`', '``')}`"
 
     def list_tables(self) -> list[str]:
         """List all tables and views in the current database."""
@@ -174,3 +179,17 @@ class MySQLConnector(BaseConnector):
                 ts = row["UPDATE_TIME"]
                 return ts if isinstance(ts, datetime) else datetime.fromisoformat(str(ts))
             return None
+
+    def get_column_max(self, table: str, column: str) -> date | datetime | None:
+        """Return the maximum value in a column with one aggregate query."""
+        quoted_table = self._quote_identifier(table)
+        quoted_column = self._quote_identifier(column)
+        try:
+            with self._cursor() as cur:
+                cur.execute(
+                    f"SELECT MAX({quoted_column}) AS max_value FROM {quoted_table}"
+                )
+                row = cur.fetchone()
+        except pymysql.Error:
+            return None
+        return row["max_value"] if row else None
