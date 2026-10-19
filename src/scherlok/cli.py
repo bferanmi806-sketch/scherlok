@@ -1279,28 +1279,72 @@ def _project_name_from_connection(conn: str) -> str:
 
 
 @app.command()
-def report() -> None:
+def report(
+    output: str = typer.Option(
+        "text", "--output",
+        help="Output format: 'text' (default) or 'json' for CI parsers",
+    ),
+) -> None:
     """Show profile summary for all monitored tables.
 
-    Example:
+    Examples:
         scherlok report
+        scherlok report --output json
     """
-    store = ProfileStore()
-    connector = _get_connector_or_exit()
-    tables = connector.list_tables()
+    output_lower = output.lower()
+    if output_lower not in OUTPUT_FORMATS:
+        console.print(
+            f"[red]Invalid --output value '{output}'. Use 'text' or 'json'.[/red]"
+        )
+        raise typer.Exit(code=1)
+    json_mode = output_lower == OUTPUT_JSON
 
-    if not tables:
-        console.print("[yellow]No tables found.[/yellow]")
-        raise typer.Exit(code=0)
+    from scherlok.output import set_stderr, set_verbosity
 
-    all_anomalies = store.get_anomaly_history(days=30)
+    prev_quiet = is_quiet()
+    if json_mode:
+        set_stderr(True)
+        set_verbosity(quiet=True)
 
-    for table in tables:
-        vol = store.get_latest_profile(table, "volume")
-        sch = store.get_latest_profile(table, "schema")
-        fresh = store.get_latest_profile(table, "freshness")
-        table_anomaly_count = sum(1 for a in all_anomalies if a["table"] == table)
-        print_profile_summary(table, vol, sch, fresh, anomaly_count=table_anomaly_count)
+    try:
+        store = ProfileStore()
+        connector = _get_connector_or_exit()
+        tables = connector.list_tables()
+
+        if not tables:
+            if json_mode:
+                print("[]")
+            else:
+                console.print("[yellow]No tables found.[/yellow]")
+            return
+
+        all_anomalies = store.get_anomaly_history(days=30)
+        records: list[dict] = []
+
+        for table in tables:
+            vol = store.get_latest_profile(table, "volume")
+            sch = store.get_latest_profile(table, "schema")
+            fresh = store.get_latest_profile(table, "freshness")
+            table_anomaly_count = sum(1 for a in all_anomalies if a["table"] == table)
+            if json_mode:
+                records.append({
+                    "table": table,
+                    "volume": vol,
+                    "schema": sch,
+                    "freshness": fresh,
+                    "anomaly_count": table_anomaly_count,
+                })
+            else:
+                print_profile_summary(
+                    table, vol, sch, fresh, anomaly_count=table_anomaly_count
+                )
+
+        if json_mode:
+            print(json.dumps(records))
+    finally:
+        if json_mode:
+            set_stderr(False)
+            set_verbosity(quiet=prev_quiet)
 
 
 def _table_health(
