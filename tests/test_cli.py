@@ -441,3 +441,90 @@ class TestHistoryJson:
     def test_invalid_output_value_exits_1(self):
         result = runner.invoke(app, ["history", "--output", "xml"])
         assert result.exit_code == 1
+
+def test_report_json_emits_only_structured_records():
+    profiles = {
+        ("orders", "volume"): {"row_count": 14},
+        ("orders", "schema"): {"columns": [{"name": "id", "type": "INTEGER"}]},
+        ("orders", "freshness"): {"hours_since_update": 3.0},
+        ("users", "volume"): {"row_count": 5},
+    }
+    with (
+        patch("scherlok.cli.ProfileStore") as store_cls,
+        patch("scherlok.cli._get_connector_or_exit") as get_connector,
+        patch("scherlok.cli.print_profile_summary") as text_renderer,
+    ):
+        get_connector.return_value.list_tables.return_value = ["orders", "users"]
+        store = store_cls.return_value
+        store.get_latest_profile.side_effect = (
+            lambda table, kind: profiles.get((table, kind))
+        )
+        store.get_anomaly_history.return_value = [
+            {"table": "orders", "type": "volume_drop"},
+            {"table": "orders", "type": "schema_change"},
+            {"table": "other", "type": "volume_drop"},
+        ]
+
+        result = runner.invoke(app, ["report", "--output", "json"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == [
+        {
+            "table": "orders",
+            "volume": {"row_count": 14},
+            "schema": {"columns": [{"name": "id", "type": "INTEGER"}]},
+            "freshness": {"hours_since_update": 3.0},
+            "anomaly_count": 2,
+        },
+        {
+            "table": "users",
+            "volume": {"row_count": 5},
+            "schema": None,
+            "freshness": None,
+            "anomaly_count": 0,
+        },
+    ]
+    text_renderer.assert_not_called()
+
+
+def test_report_json_empty_database_returns_empty_array():
+    with (
+        patch("scherlok.cli.ProfileStore"),
+        patch("scherlok.cli._get_connector_or_exit") as get_connector,
+    ):
+        get_connector.return_value.list_tables.return_value = []
+        result = runner.invoke(app, ["report", "--output", "json"])
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == []
+
+
+def test_report_rejects_invalid_output_format():
+    result = runner.invoke(app, ["report", "--output", "yaml"])
+    assert result.exit_code == 1
+    assert "Invalid --output value 'yaml'. Use 'text' or 'json'." in result.output
+
+
+def test_report_text_mode_preserves_summary_renderer():
+    with (
+        patch("scherlok.cli.ProfileStore") as store_cls,
+        patch("scherlok.cli._get_connector_or_exit") as get_connector,
+        patch("scherlok.cli.print_profile_summary") as renderer,
+    ):
+        get_connector.return_value.list_tables.return_value = ["orders"]
+        store = store_cls.return_value
+        store.get_latest_profile.side_effect = (
+            lambda table, kind: {
+                "volume": {"row_count": 9},
+                "schema": None,
+                "freshness": None,
+            }[kind]
+        )
+        store.get_anomaly_history.return_value = [{"table": "orders", "type": "volume_drop"}]
+        result = runner.invoke(app, ["report"])
+
+    assert result.exit_code == 0, result.output
+    renderer.assert_called_once_with(
+        "orders", {"row_count": 9}, None, None, anomaly_count=1
+    )
+

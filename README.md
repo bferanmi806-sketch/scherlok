@@ -385,7 +385,7 @@ scherlok dbt [--project-dir .] [--output json]  Profile dbt models from manifest
 scherlok dbt-run-and-watch [--build] [--output json]  Run dbt + profile in one step
 scherlok status [--output json] Quick health dashboard
 scherlok history [--days N] [--output json]  Timeline of past anomalies
-scherlok report                 Detailed profile summary
+scherlok report [--output json] Detailed profile summary
 scherlok dashboard [--out .html] Generate self-contained HTML report
 scherlok config --store <url>   Set remote storage
 scherlok demo [--keep] [--output json]  Self-contained demo on a sample DuckDB (no database needed)
