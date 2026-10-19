@@ -56,7 +56,7 @@ Remote stores (`s3://`, `gs://`, `az://`) let CI runners and teammates share one
 ```
 scherlok status [--output json]    Health per table
 scherlok history [--days N]        Past anomalies
-scherlok report                    Detailed profile summary
+scherlok report [--output json]    Detailed profile summary
 scherlok dashboard --out report.html   Self-contained HTML report
 scherlok config show               Current settings
 ```
