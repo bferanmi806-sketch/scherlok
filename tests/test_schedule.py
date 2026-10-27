@@ -131,3 +131,24 @@ def test_cli_scheduled_ticks_reuse_run_watch():
     assert result.exit_code == 0
     scheduler.assert_called_once()
     one_watch.assert_called_once_with(webhook=None, emails=None, explain=True)
+
+
+def test_cli_missing_croniter_exits_with_hint(monkeypatch):
+    monkeypatch.setitem(sys.modules, "croniter", None)
+    result = CliRunner().invoke(app, ["watch", "--schedule", "*/5 * * * *"])
+    assert result.exit_code == 1
+    assert "pip install 'scherlok[schedule]'" in result.output
+
+
+def test_cli_scheduled_connection_exit_is_reported_without_stopping():
+    def fake_schedule(expression, on_tick, log_result):
+        assert expression == "*/5 * * * *"
+        log_result(on_tick())
+
+    with (
+        patch("scherlok.schedule.run_schedule", side_effect=fake_schedule),
+        patch("scherlok.cli._run_watch", side_effect=__import__("typer").Exit(code=1)),
+    ):
+        result = CliRunner().invoke(app, ["watch", "--schedule", "*/5 * * * *"])
+    assert result.exit_code == 0
+    assert "exit code 1" in result.output
