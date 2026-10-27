@@ -432,14 +432,19 @@ def watch(
     from scherlok.schedule import ScheduleError, run_schedule
 
     def run_once() -> int:
-        anomalies = _run_watch(webhook=webhook, emails=email or None, explain=explain)
-        return exit_code_for(anomalies)
+        try:
+            anomalies = _run_watch(webhook=webhook, emails=email or None, explain=explain)
+            return exit_code_for(anomalies)
+        except typer.Exit as exc:
+            # A failed connection should be logged as a run failure, rather than
+            # silently stopping all subsequent scheduled checks.
+            return int(exc.exit_code)
 
     try:
         run_schedule(
             schedule,
             run_once,
-            lambda code: out_info(f"Scheduled watch completed (exit code {code})."),
+            lambda code: typer.echo(f"Scheduled watch completed (exit code {code})."),
         )
     except ScheduleError as exc:
         out_error(str(exc))
