@@ -439,6 +439,12 @@ def watch(
             # A failed connection should be logged as a run failure, rather than
             # silently stopping all subsequent scheduled checks.
             return int(exc.exit_code)
+        except Exception as exc:
+            typer.echo(
+                f"Scheduled watch raised {type(exc).__name__}; continuing at the next tick.",
+                err=True,
+            )
+            return 1
 
     try:
         run_schedule(
@@ -447,7 +453,7 @@ def watch(
             lambda code: typer.echo(f"Scheduled watch completed (exit code {code})."),
         )
     except ScheduleError as exc:
-        out_error(str(exc))
+        typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
 
 

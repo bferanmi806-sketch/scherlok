@@ -48,7 +48,9 @@ def test_missing_dependency_gives_install_hint(monkeypatch):
 def test_successive_ticks_and_exit_code_reporting(monkeypatch):
     captured = {}
     monkeypatch.setattr(schedule.signal, "getsignal", lambda sig: f"old-{sig}")
-    monkeypatch.setattr(schedule.signal, "signal", lambda sig, handler: captured.update({sig: handler}))
+    monkeypatch.setattr(
+        schedule.signal, "signal", lambda sig, handler: captured.update({sig: handler})
+    )
     clock = [datetime(2026, 10, 27, 9, 0)]
     intervals = []
     exits = []
@@ -70,7 +72,9 @@ def test_successive_ticks_and_exit_code_reporting(monkeypatch):
 def test_shutdown_during_run_finishes_current_tick(monkeypatch):
     captured = {}
     monkeypatch.setattr(schedule.signal, "getsignal", lambda sig: f"old-{sig}")
-    monkeypatch.setattr(schedule.signal, "signal", lambda sig, handler: captured.update({sig: handler}))
+    monkeypatch.setattr(
+        schedule.signal, "signal", lambda sig, handler: captured.update({sig: handler})
+    )
     clock = [datetime(2026, 10, 27, 9, 0)]
     runs = []
     reports = []
@@ -152,3 +156,25 @@ def test_cli_scheduled_connection_exit_is_reported_without_stopping():
         result = CliRunner().invoke(app, ["watch", "--schedule", "*/5 * * * *"])
     assert result.exit_code == 0
     assert "exit code 1" in result.output
+
+
+def test_cli_scheduled_unexpected_error_is_reported_and_next_tick_can_run():
+    def fake_schedule(expression, on_tick, log_result):
+        assert expression == "*/5 * * * *"
+        log_result(on_tick())
+        log_result(on_tick())
+
+    with (
+        patch("scherlok.schedule.run_schedule", side_effect=fake_schedule),
+        patch(
+            "scherlok.cli._run_watch",
+            side_effect=[RuntimeError("database unavailable"), []],
+        ) as one_watch,
+    ):
+        result = CliRunner().invoke(app, ["watch", "--schedule", "*/5 * * * *"])
+
+    assert result.exit_code == 0
+    assert one_watch.call_count == 2
+    assert "RuntimeError" in result.output
+    assert result.output.count("exit code 1") == 1
+    assert result.output.count("exit code 0") == 1

@@ -59,8 +59,9 @@ def run_schedule(
 
         while not stop.is_set():
             # Recalculate from now after every run: do not replay missed ticks.
-            next_tick = croniter(expression, current_time()).get_next(datetime)
-            seconds = max(0.0, (next_tick - current_time()).total_seconds())
+            scheduled_from = current_time()
+            next_tick = croniter(expression, scheduled_from).get_next(datetime)
+            seconds = max(0.0, (next_tick - scheduled_from).total_seconds())
             if wait_for_stop(seconds) or stop.is_set():
                 break
             result = run_once()
