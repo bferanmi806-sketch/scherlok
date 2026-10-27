@@ -14,6 +14,7 @@ pip install "scherlok[snowflake]"   # Snowflake
 pip install "scherlok[mysql]"       # MySQL
 pip install "scherlok[duckdb]"      # DuckDB (also needed for `scherlok demo`)
 pip install "scherlok[dbt]"         # dbt project support
+pip install "scherlok[schedule]"    # recurring cron watch
 ```
 
 Or run the container image, which bundles every extra:
