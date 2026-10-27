@@ -41,6 +41,29 @@ scherlok watch                                    # detect anomalies
 
 The first `watch` after `investigate` compares against that baseline. Every run saves a new profile, so the baseline keeps learning.
 
+## Run watch on a schedule
+
+Install `scherlok[schedule]`, configure the connection and baseline as above, then:
+
+```bash
+scherlok watch --schedule "0 6 * * *" --explain
+```
+
+This runs at the **next 06:00 in the host's local time**, then daily. An anomaly's normal
+exit status is logged for each run; it does not stop subsequent runs. `SIGINT`
+or `SIGTERM` requests shutdown after the current run finishes. Missed ticks are
+not replayed after a slow run. Without `--schedule`, `watch` still runs once.
+
+The Docker image includes the schedule extra. With a previously configured
+`~/.scherlok` directory mounted into the container, for example:
+
+```bash
+docker run --rm -v "$HOME/.scherlok:/home/scherlok/.scherlok" \
+  ghcr.io/rbmuller/scherlok:latest watch --schedule "0 6 * * *"
+```
+
+The container defaults to UTC unless its local timezone has been configured.
+
 `scherlok ci <url>` runs connect, investigate and watch in one step and sets the exit code; see [CI/CD gate](ci-cd.md).
 
 ## Where things live
